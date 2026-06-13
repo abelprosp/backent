@@ -1,0 +1,474 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["platform", "public"]
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLATFORM SCHEMA — Multi-tenant control plane
+// ═══════════════════════════════════════════════════════════════
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+
+  @@schema("platform")
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  BUSINESS
+  ENTERPRISE
+
+  @@schema("platform")
+}
+
+enum ProjectStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  MIGRATING
+  DELETED
+
+  @@schema("platform")
+}
+
+enum ServerStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+  FULL
+
+  @@schema("platform")
+}
+
+enum WebhookEvent {
+  INSERT
+  UPDATE
+  DELETE
+  AUTH
+
+  @@schema("platform")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  PROVISION
+  MIGRATE
+  SUSPEND
+
+  @@schema("platform")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String?
+  avatarUrl     String?
+  role          UserRole  @default(USER)
+  emailVerified Boolean   @default(false)
+  mfaEnabled    Boolean   @default(false)
+  mfaSecret     String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspaces       WorkspaceMember[]
+  refreshTokens    RefreshToken[]
+  magicLinks       MagicLink[]
+  passwordResets   PasswordReset[]
+  auditLogs        AuditLog[]
+  ownedWorkspaces  Workspace[]       @relation("WorkspaceOwner")
+
+  @@map("users")
+  @@schema("platform")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+  @@schema("platform")
+}
+
+model MagicLink {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  email     String
+  userId    String?
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@map("magic_links")
+  @@schema("platform")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_resets")
+  @@schema("platform")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  ownerId   String
+  planId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  plan    Plan              @relation(fields: [planId], references: [id])
+  members WorkspaceMember[]
+  projects Project[]
+
+  @@map("workspaces")
+  @@schema("platform")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String   @default("member")
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+  @@schema("platform")
+}
+
+model Plan {
+  id              String   @id @default(cuid())
+  name            String
+  tier            PlanTier @unique
+  priceMonthly    Int      @default(0)
+  priceYearly     Int      @default(0)
+  storageGb       Int      @default(5)
+  apiRequests     Int      @default(10000)
+  maxProjects     Int      @default(1)
+  maxTables       Int      @default(10)
+  maxUsers        Int      @default(100)
+  bandwidthGb     Int      @default(10)
+  realtimeEnabled Boolean  @default(false)
+  webhooksEnabled Boolean  @default(false)
+  customDomain    Boolean  @default(false)
+  stripePriceId   String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  workspaces    Workspace[]
+  subscriptions Subscription[]
+
+  @@map("plans")
+  @@schema("platform")
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  workspaceId          String    @unique
+  planId               String
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  mercadoPagoId        String?
+  status               String    @default("active")
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+  @@schema("platform")
+}
+
+model ServerNode {
+  id           String       @id @default(cuid())
+  name         String
+  host         String       @unique
+  port         Int          @default(5432)
+  region       String       @default("sa-east-1")
+  status       ServerStatus @default(ONLINE)
+  capacity     Int          @default(100)
+  currentLoad  Int          @default(0)
+  storageTotal Int          @default(400)
+  storageUsed  Int          @default(0)
+  isPrimary    Boolean      @default(false)
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  projects Project[]
+
+  @@map("server_nodes")
+  @@schema("platform")
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  name            String
+  slug            String
+  description     String?
+  workspaceId     String
+  serverNodeId    String
+  status          ProjectStatus @default(PROVISIONING)
+  schemaName      String        @unique
+  apiUrl          String?
+  storageBucket   String?
+  jwtSecret       String
+  settings        Json          @default("{}")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  provisionedAt   DateTime?
+  suspendedAt     DateTime?
+
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  serverNode  ServerNode     @relation(fields: [serverNodeId], references: [id])
+  apiKeys     ApiKey[]
+  tables      ProjectTable[]
+  webhooks    Webhook[]
+  usageMetrics UsageMetric[]
+  authUsers   ProjectAuthUser[]
+  storageFiles StorageFile[]
+  templates   ProjectTemplate[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@index([serverNodeId])
+  @@map("projects")
+  @@schema("platform")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  projectId   String
+  name        String
+  keyHash     String    @unique
+  keyPrefix   String
+  permissions Json      @default("[\"read\",\"write\"]")
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revoked     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("api_keys")
+  @@schema("platform")
+}
+
+model ProjectTable {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  displayName String?
+  description String?
+  columns     Json
+  indexes     Json     @default("[]")
+  constraints Json     @default("[]")
+  relations   Json     @default("[]")
+  rowCount    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("project_tables")
+  @@schema("platform")
+}
+
+model Webhook {
+  id          String         @id @default(cuid())
+  projectId   String
+  name        String
+  url         String
+  events      WebhookEvent[]
+  secret      String
+  active      Boolean        @default(true)
+  headers     Json           @default("{}")
+  retryCount  Int            @default(3)
+  lastTriggeredAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([projectId])
+  @@map("webhooks")
+  @@schema("platform")
+}
+
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  webhookId    String
+  event        String
+  payload      Json
+  statusCode   Int?
+  response     String?
+  success      Boolean  @default(false)
+  attempts     Int      @default(1)
+  createdAt    DateTime @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@map("webhook_deliveries")
+  @@schema("platform")
+}
+
+model ProjectAuthUser {
+  id           String    @id @default(cuid())
+  projectId    String
+  email        String
+  passwordHash String?
+  metadata     Json      @default("{}")
+  role         String    @default("user")
+  verified     Boolean   @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, email])
+  @@index([projectId])
+  @@map("project_auth_users")
+  @@schema("platform")
+}
+
+model StorageFile {
+  id          String   @id @default(cuid())
+  projectId   String
+  bucket      String
+  key         String
+  filename    String
+  mimeType    String
+  size        Int
+  isPublic    Boolean  @default(false)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+  @@index([projectId])
+  @@map("storage_files")
+  @@schema("platform")
+}
+
+model UsageMetric {
+  id            String   @id @default(cuid())
+  projectId     String
+  date          DateTime @db.Date
+  apiRequests   Int      @default(0)
+  storageBytes  BigInt   @default(0)
+  bandwidthBytes BigInt  @default(0)
+  authUsers     Int      @default(0)
+  tableCount    Int      @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date])
+  @@index([projectId])
+  @@map("usage_metrics")
+  @@schema("platform")
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?
+  action     AuditAction
+  resource   String
+  resourceId String?
+  metadata   Json        @default("{}")
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+  @@schema("platform")
+}
+
+model ProjectTemplate {
+  id          String   @id @default(cuid())
+  projectId   String?
+  name        String
+  description String?
+  category    String   @default("general")
+  schema      Json
+  isPublic    Boolean  @default(false)
+  downloads   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("project_templates")
+  @@schema("platform")
+}
+
+model JobQueue {
+  id          String   @id @default(cuid())
+  type        String
+  payload     Json
+  status      String   @default("pending")
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(3)
+  error       String?
+  scheduledAt DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([status, scheduledAt])
+  @@map("job_queue")
+  @@schema("platform")
+}

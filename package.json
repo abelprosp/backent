@@ -1,0 +1,32 @@
+{
+  "name": "backent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backent — Seu backend pronto em minutos.",
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:infra": "docker compose -f docker/docker-compose.yml up -d postgres redis minio",
+    "dev:api": "pnpm --filter @backent/api dev",
+    "dev:web": "pnpm --filter @backent/web dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "pnpm --filter @backent/database generate",
+    "db:migrate": "pnpm --filter @backent/database migrate",
+    "db:push": "pnpm --filter @backent/database push",
+    "db:seed": "pnpm --filter @backent/database seed",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "setup": "bash scripts/setup.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

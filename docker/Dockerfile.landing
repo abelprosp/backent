@@ -1,0 +1,16 @@
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+WORKDIR /app
+
+FROM base AS builder
+COPY . .
+RUN pnpm install
+RUN pnpm --filter @backent/landing build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/apps/landing/.next/standalone ./
+COPY --from=builder /app/apps/landing/.next/static ./apps/landing/.next/static
+EXPOSE 3002
+CMD ["node", "apps/landing/server.js"]

@@ -1,0 +1,16 @@
+{
+  "name": "@backent/sdk-js",
+  "version": "0.1.0",
+  "description": "Backent JavaScript/TypeScript SDK",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "files": ["dist"],
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
