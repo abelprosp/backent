@@ -1,0 +1,56 @@
+# Use junto com docker-compose.yml:
+# docker compose -f docker/docker-compose.yml -f docker/docker-compose.traefik.yml up -d --build
+#
+# Descubra o nome da rede do Traefik:
+#   docker inspect traefik-traefik-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}'
+#
+# Descubra o certresolver:
+#   grep -r certresolver /docker/traefik/ 2>/dev/null | head -5
+
+services:
+  api:
+    networks:
+      - default
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik_default
+      - traefik.http.routers.backent-api.rule=Host(`api.backent.cloud`)
+      - traefik.http.routers.backent-api.entrypoints=websecure
+      - traefik.http.routers.backent-api.tls=true
+      - traefik.http.routers.backent-api.tls.certresolver=letsencrypt
+      - traefik.http.services.backent-api.loadbalancer.server.port=4000
+
+  web:
+    networks:
+      - default
+      - traefik
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.backent.cloud/api/v1}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik_default
+      - traefik.http.routers.backent-app.rule=Host(`app.backent.cloud`)
+      - traefik.http.routers.backent-app.entrypoints=websecure
+      - traefik.http.routers.backent-app.tls=true
+      - traefik.http.routers.backent-app.tls.certresolver=letsencrypt
+      - traefik.http.services.backent-app.loadbalancer.server.port=3000
+
+  landing:
+    networks:
+      - default
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik_default
+      - traefik.http.routers.backent-landing.rule=Host(`backent.cloud`) || Host(`www.backent.cloud`)
+      - traefik.http.routers.backent-landing.entrypoints=websecure
+      - traefik.http.routers.backent-landing.tls=true
+      - traefik.http.routers.backent-landing.tls.certresolver=letsencrypt
+      - traefik.http.services.backent-landing.loadbalancer.server.port=3002
+
+networks:
+  traefik:
+    external: true
+    name: traefik_default

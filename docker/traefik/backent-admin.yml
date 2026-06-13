@@ -1,0 +1,21 @@
+# Copie para a pasta dynamic do Traefik no VPS, ex.:
+#   cp docker/traefik/backent-admin.yml /docker/traefik/dynamic/backent-admin.yml
+#
+# Ajuste certResolver se o seu Traefik usar outro nome (grep certresolver /docker/traefik/)
+# Gateway Docker no Linux: 172.17.0.1 (admin rodando via PM2 na porta 3001)
+
+http:
+  routers:
+    backent-admin:
+      rule: Host(`admin.backent.cloud`)
+      entryPoints:
+        - websecure
+      service: backent-admin
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    backent-admin:
+      loadBalancer:
+        servers:
+          - url: "http://172.17.0.1:3001"

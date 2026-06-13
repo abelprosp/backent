@@ -14,6 +14,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   transpilePackages: ['@backent/shared'],
   async rewrites() {
     return [

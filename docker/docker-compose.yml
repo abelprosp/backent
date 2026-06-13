@@ -4,11 +4,11 @@ services:
     container_name: backent-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: backent
-      POSTGRES_PASSWORD: backent_secret
-      POSTGRES_DB: backent_platform
+      POSTGRES_USER: ${POSTGRES_USER:-backent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backent_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-backent_platform}
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - backent_postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -23,7 +23,7 @@ services:
     container_name: backent-redis
     restart: unless-stopped
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
     volumes:
       - backent_redis_data:/data
     healthcheck:
@@ -38,11 +38,11 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: backent_minio
-      MINIO_ROOT_PASSWORD: backent_minio_secret
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-backent_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-backent_minio_secret}
     ports:
-      - '9000:9000'
-      - '9001:9001'
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
     volumes:
       - backent_minio_data:/data
     healthcheck:
@@ -58,19 +58,16 @@ services:
     container_name: backent-api
     restart: unless-stopped
     ports:
-      - '4000:4000'
+      - '127.0.0.1:4000:4000'
+    env_file:
+      - ../.env
     environment:
-      DATABASE_URL: postgresql://backent:backent_secret@postgres:5432/backent_platform?schema=platform
+      NODE_ENV: production
       REDIS_HOST: redis
       REDIS_PORT: 6379
       MINIO_ENDPOINT: minio
-      MINIO_PORT: 9000
-      MINIO_ACCESS_KEY: backent_minio
-      MINIO_SECRET_KEY: backent_minio_secret
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret}
+      MINIO_USE_SSL: 'false'
       API_PORT: 4000
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001,http://localhost:3002
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,12 +80,15 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.backent.cloud/api/v1}
     container_name: backent-web
     restart: unless-stopped
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.backent.cloud/api/v1}
     depends_on:
       - api
 
@@ -99,7 +99,9 @@ services:
     container_name: backent-landing
     restart: unless-stopped
     ports:
-      - '3002:3002'
+      - '127.0.0.1:3002:3002'
+    environment:
+      NODE_ENV: production
     depends_on:
       - api
 

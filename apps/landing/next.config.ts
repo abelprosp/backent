@@ -12,6 +12,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   transpilePackages: ['@backent/shared'],
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
