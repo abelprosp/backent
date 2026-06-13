@@ -1,0 +1,61 @@
+# Rotas Backent para Traefik em network_mode: host
+# Copie para o Traefik do VPS:
+#   cp docker/traefik/backent-routes.yml /docker/traefik/dynamic/backent-routes.yml
+#
+# Requer containers Backent com portas em 127.0.0.1 (docker-compose.yml padrão)
+# certResolver deve ser igual ao traefik.yml (geralmente: letsencrypt)
+
+http:
+  routers:
+    backent-api:
+      rule: Host(`api.backent.cloud`)
+      entryPoints:
+        - websecure
+      service: backent-api
+      tls:
+        certResolver: letsencrypt
+
+    backent-app:
+      rule: Host(`app.backent.cloud`)
+      entryPoints:
+        - websecure
+      service: backent-app
+      tls:
+        certResolver: letsencrypt
+
+    backent-landing:
+      rule: Host(`backent.cloud`) || Host(`www.backent.cloud`)
+      entryPoints:
+        - websecure
+      service: backent-landing
+      tls:
+        certResolver: letsencrypt
+
+    backent-admin:
+      rule: Host(`admin.backent.cloud`)
+      entryPoints:
+        - websecure
+      service: backent-admin
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    backent-api:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:4000
+
+    backent-app:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:3000
+
+    backent-landing:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:3002
+
+    backent-admin:
+      loadBalancer:
+        servers:
+          - url: http://127.0.0.1:3001
