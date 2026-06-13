@@ -2,24 +2,23 @@ FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
-FROM base AS deps
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
-COPY apps/landing/package.json ./apps/landing/
-COPY packages/shared/package.json ./packages/shared/
-RUN pnpm install --frozen-lockfile || pnpm install
-
 FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* tsconfig.json ./
+COPY apps/landing ./apps/landing
+COPY packages/shared ./packages/shared
+RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm --filter @backent/shared build
 RUN pnpm --filter @backent/landing build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3002
+
 COPY --from=builder /app/apps/landing/.next/standalone ./
 COPY --from=builder /app/apps/landing/.next/static ./apps/landing/.next/static
 COPY --from=builder /app/apps/landing/public ./apps/landing/public
+
 EXPOSE 3002
-ENV PORT=3002
-ENV HOSTNAME=0.0.0.0
 CMD ["node", "apps/landing/server.js"]
